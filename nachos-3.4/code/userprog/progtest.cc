@@ -13,6 +13,9 @@
 #include "console.h"
 #include "addrspace.h"
 #include "synch.h"
+#ifdef CHANGED
+#include "pcb.h"
+#endif
 
 //----------------------------------------------------------------------
 // StartProcess
@@ -32,6 +35,11 @@ StartProcess(char *filename)
     }
     space = new AddrSpace(executable);    
     currentThread->space = space;
+#ifdef CHANGED
+    PCB *pcb = new PCB(NULL, currentThread);
+    pcbTable->Alloc(pcb);		// first process is pid 1
+    currentThread->pcb = pcb;
+#endif
 
     delete executable;			// close file
 

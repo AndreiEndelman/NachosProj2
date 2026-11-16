@@ -43,6 +43,9 @@
 #ifdef USER_PROGRAM
 #include "machine.h"
 #include "addrspace.h"
+#ifdef CHANGED
+class PCB;
+#endif
 #endif
 
 // CPU register state to be saved on context switch.  
@@ -127,6 +130,11 @@ class Thread {
     void RestoreUserState();		// restore user-level register state
 
     AddrSpace *space;			// User code this thread is running.
+#ifdef CHANGED
+    PCB *pcb;				// process this thread belongs to
+    void SetUserRegister(int num, int value)	// used by Fork to set the
+	{ userRegisters[num] = value; }		// child's starting PC
+#endif
 #endif
 };
 

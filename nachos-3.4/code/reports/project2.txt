@@ -1,0 +1,104 @@
+Project 2 Report
+
+Partner 1 Name: Andrei Endelman (Yield, Exit, Join, Kill)
+Partner 2 Name: Alec Borque (Exec)
+Partner 3 Name: Uriel Zeledon (Fork, process and memory infrastructure)
+
+System call status
+------------------
+Fork:  Completed. Child gets a copy of the parent's memory and starts at func.
+Exec:  TODO (Alec)
+Yield: TODO (Andrei)
+Exit:  TODO (Andrei)
+Join:  TODO (Andrei)
+Kill:  TODO (Andrei)
+
+Files added or changed
+----------------------
+userprog/exception.cc      Syscall dispatch (switch on r2), AdvancePC, Fork
+userprog/pcb.h, pcb.cc     Process Control Block and the pid table (new)
+userprog/memorymanager.h, memorymanager.cc
+                           Physical page allocator (new)
+userprog/addrspace.h, addrspace.cc
+                           Paged loading, Fork copy constructor, Translate,
+                           frees pages on delete
+userprog/progtest.cc       First process gets a PCB with pid 1
+userprog/syscall.h         Fork returns the child's pid (SpaceId)
+threads/thread.h, thread.cc
+                           Each thread has a PCB pointer; SetUserRegister()
+threads/system.h, system.cc
+                           Global memManager and pcbTable, created in Initialize()
+Makefile.common            Builds memorymanager.cc and pcb.cc
+test/forktest.c            Small Fork test (see Testing)
+
+All changes are inside #ifdef CHANGED, as in Project 1.
+
+Infrastructure: implementation summary
+--------------------------------------
+Memory manager. Stock Nachos maps virtual page i to physical page i, so only
+one program can be in memory. MemoryManager keeps a BitMap over the 32
+physical pages behind a Lock. getPage() returns the lowest free page (or -1),
+clearPage() gives a page back, and NumFreePages() reports how many are free.
+One global instance, memManager, is created in system.cc.
+
+Address spaces. AddrSpace(OpenFile*) first checks that the whole program fits
+in the free pages. If it does not, it takes no pages and IsValid() returns
+FALSE, so Exec can return -1. Otherwise it gets a physical page for every
+virtual page, zeroes only those pages, and loads the code and data segments
+page by page through Translate(), since the physical pages are not contiguous.
+Translate(virtAddr, &physAddr) turns a user virtual address into an offset in
+mainMemory and returns FALSE for addresses outside the space. The destructor
+returns every page to the memory manager.
+
+Process table. Each process has a PCB holding its pid, parent PCB, kernel
+thread, exit status and a Lock/Condition pair for Join. PCBTable hands out the
+lowest free pid from a BitMap. Pid 0 is never used, so the first process is
+pid 1, matching the sample output. Each Thread has a pcb pointer, and
+StartProcess gives the first program its PCB.
+
+Syscall dispatch. ExceptionHandler switches on the code in r2, reads
+arguments from r4, writes return values to r2, and calls AdvancePC() to move
+PrevPC, PC and NextPC forward by one instruction. Without that the program
+would repeat the same syscall forever.
+
+Fork: implementation summary
+----------------------------
+Fork(func) takes the address of func from r4 and:
+1. Allocates a PCB and pid for the child (parent = the caller's PCB).
+2. Checks that there are at least as many free pages as the parent uses. If
+   not, it prints "Not Enough Memory for Child Process <pid>", frees the pid
+   and returns -1, without taking any pages.
+3. Creates a new Thread and gives it a new AddrSpace built by the copy
+   constructor, which takes fresh physical pages and copies the parent's
+   pages into them, so parent and child cannot overwrite each other.
+4. Saves the parent's current registers into the child (SaveUserState), then
+   sets the child's PC to func, NextPC to func+4 and PrevPC to func-4. Because
+   the child keeps the parent's stack pointer and return address (r31), when
+   func returns the child continues right after the Fork() call.
+5. Prints "Process [pid] Fork: start at address [0x...] with [n] pages
+   memory" and calls Thread::Fork(ForkStart, 0) to put the child on the ready
+   list. The parent gets the child's pid back in r2.
+
+ForkStart is the first thing the child's kernel thread runs. A new thread
+never goes through the restore code in Scheduler::Run(), so ForkStart
+restores the child's registers and page table itself and then calls
+machine->Run().
+
+Testing
+-------
+test/forktest.c forks a child that calls Halt(), while the parent loops
+forever. Run with time slicing so the parent is preempted:
+
+    ./nachos -rs 5 -x ../test/forktest
+
+Output:
+    System Call: [1] invoked Fork.
+    Process [1] Fork: start at address [0xd0] with [11] pages memory
+    Machine halting!
+
+The machine halts from the child, which shows the child ran on its own copy
+of the parent's address space. Tested on Ubuntu 24.04 (WSL) with the bundled
+cross-compiler.
+
+TODO: results of the TA tests (fork, join, exec, kill, memory) once all
+system calls are in.
