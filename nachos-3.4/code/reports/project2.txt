@@ -6,7 +6,7 @@ Partner 3 Name: Uriel Zeledon (Fork, process and memory infrastructure)
 
 System call status
 ------------------
-Fork:  Completed. Child gets a copy of the parent's memory and starts at func.
+Fork:  Completed (Uriel). Child gets a copy of the parent's memory and starts at func.
 Exec:  TODO (Alec)
 Yield: TODO (Andrei)
 Exit:  TODO (Andrei)
@@ -33,7 +33,7 @@ test/forktest.c            Small Fork test (see Testing)
 
 All changes are inside #ifdef CHANGED, as in Project 1.
 
-Infrastructure: implementation summary
+Infrastructure: implementation summary (Uriel Zeledon)
 --------------------------------------
 Memory manager. Stock Nachos maps virtual page i to physical page i, so only
 one program can be in memory. MemoryManager keeps a BitMap over the 32
@@ -61,7 +61,7 @@ arguments from r4, writes return values to r2, and calls AdvancePC() to move
 PrevPC, PC and NextPC forward by one instruction. Without that the program
 would repeat the same syscall forever.
 
-Fork: implementation summary
+Fork: implementation summary (Uriel Zeledon)
 ----------------------------
 Fork(func) takes the address of func from r4 and:
 1. Allocates a PCB and pid for the child (parent = the caller's PCB).
