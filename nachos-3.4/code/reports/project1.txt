@@ -1,0 +1,130 @@
+Project 1 Report
+
+Partner 1 Name: Andrei Endelman (Exercise 2/3)
+Partner 2 Name: Alec Borque (Exercise 1)
+Partner 3 Name: Uriel Zeledon (Exercise 4)
+
+Exercise status
+---------------
+Exercise 1 (Simple Threads Programming): Completed. ThreadTest(int n) forks n threads; SimpleThread is synchronized with semaphores under HW1_SEMAPHORES.
+Exercise 2 (Implementing Locks): Completed. Lock is implemented in synch.cc and used by SimpleThread under HW1_LOCKS.
+Exercise 3 (Implementing Conditions): Completed. Condition (Mesa semantics) is implemented in synch.cc and used by the barrier under HW1_CONDITIONS.
+Exercise 4 (Elevator): Completed. Elevator() and ArrivingGoingFromTo() are in threadtest.cc and are called from main.cc under HW1_ELEVATOR.
+
+Build flags
+-----------
+All flags are passed through DEFINES, e.g. make DEFINES="-DTHREADS -DHW1_SEMAPHORES".
+(no HW1 flag)    Nachos default output ("*** thread 0 looped 0 times" ...). -q n forks n threads; the default is 1.
+HW1_SEMAPHORES   Exercise 1 SimpleThread synchronized with semaphores. -q n sets n.
+HW1_LOCKS        Same demonstration with a Lock in place of the mutex semaphore.
+HW1_ELEVATOR     Elevator simulation: 5 floors, 10 people with random floors and arrival times. -q n sets the number of people.
+Two extra flags are ours and are not needed for grading:
+HW1_NOSYNC       The Exercise 1 SimpleThread with no synchronization (used for the analysis below).
+HW1_CONDITIONS   The Exercise 1 demonstration with the barrier built from a Lock and a Condition.
+
+Exercise 1: results and explanation
+-----------------------------------
+Without synchronization (HW1_NOSYNC), every thread sees a final value of 5 for
+n = 0, 1, 2, 3 and 4, although n+1 threads each increment the variable 5 times
+and the total should be 5*(n+1).
+
+The cause is a lost update. Each thread reads SharedVariable into val, yields,
+and only afterwards writes val+1. While it is switched out, the other threads
+run and read the same old value. With round-robin scheduling all n+1 threads
+read k, then all of them write k+1, so one pass of the loop over all threads
+adds 1 instead of n+1. After 5 passes the value is 5 whatever n is. With n = 0
+there is only one thread, so nothing is lost and 5 is the correct answer.
+
+With random interrupts (-rs) the context switches fall at different points, so
+the number of lost updates varies and threads no longer agree. For example
+n = 3 with -rs 7 gave final values 6, 7, 8 and 8. A thread can also print its
+final value while other threads are still in the loop.
+
+With HW1_SEMAPHORES a semaphore with initial value 1 is held from the read of
+SharedVariable to the write, so each iteration adds exactly 1. A barrier (a
+count of finished threads protected by the same semaphore, plus a second
+semaphore with initial value 0 that the last thread releases and each thread
+passes on) makes every thread wait until all threads have left the loop before
+it reads the final value. Every thread then sees 5*(n+1): 5, 10, 15, 20 and 25
+for n = 0 to 4. This also holds with -rs.
+
+Exercise 2: implementation summary
+----------------------------------
+Lock::Lock(debugName) stores the lock name, sets busy to FALSE, sets owner to
+NULL, and allocates a waiting queue. Lock::~Lock deallocates the queue.
+
+Lock::Acquire disables interrupts, sleeps while the lock is busy, then marks
+the lock busy and records currentThread as owner. Lock::Release disables
+interrupts, asserts that only the owning thread can release, clears ownership,
+marks the lock free, and wakes one waiter if present. isHeldByCurrentThread()
+returns whether the lock owner is currentThread.
+
+Exercise 3: implementation summary
+----------------------------------
+Condition::Condition(debugName) stores the name and creates a waiting queue;
+Condition::~Condition deallocates it.
+
+Condition::Wait requires a non-NULL lock held by currentThread, appends the
+current thread to the condition queue, releases the lock, sleeps, and then
+reacquires the lock before returning. Signal wakes one waiter, and Broadcast
+wakes all waiters. Both require the caller to hold the same lock.
+
+This follows Mesa semantics: Signal/Broadcast only move waiters to the ready
+queue, and awakened threads must compete to reacquire the lock.
+
+Exercise 4: implementation summary
+----------------------------------
+Elevator(numFloors) sets up the shared state and forks the elevator thread,
+which starts on floor 1. ArrivingGoingFromTo(atFloor, toFloor) forks a new
+person thread for each request, as the spec requires, so callers never block.
+
+All shared state (current floor, direction, riders inside, people waiting per
+floor and direction, riders per destination) is protected by one Lock.
+People waiting to board wait on a per-floor Condition, riders wait on a
+per-destination-floor Condition, and the elevator waits on its own Condition
+when it is idle or waiting for people to get on and off.
+
+At each floor the elevator first broadcasts to riders whose destination is
+that floor and waits until they have all left, then picks its direction and
+broadcasts to people waiting there to go that way, letting them in up to the
+capacity of 5. It keeps moving in one direction while there is work ahead and
+reverses otherwise (LOOK scheduling), so people are picked up on the way
+instead of being served one at a time. Moving one floor takes 50 ticks; the
+lock is released during the move so new people can arrive.
+
+Every person is delivered in all of our tests (see Testing summary), and the
+elevator never held more than 5 people.
+
+Testing summary
+---------------
+HW1_SEMAPHORES, HW1_LOCKS and HW1_CONDITIONS were each run for n = 0 to 4,
+once without -rs and with nine different -rs seeds.
+- HW1_LOCKS: lock-based mutual exclusion preserved correct increments; all
+  threads finished and every thread saw 5*(n+1).
+- HW1_CONDITIONS: lock+condition barrier released only after all threads
+  completed the loop; all threads reported the same final value 5*(n+1).
+- HW1_SEMAPHORES: results matched the semaphore baseline for comparison.
+HW1_ELEVATOR was run with 0, 1, 3, 8, 20 and 40 people, without -rs and with
+seven -rs seeds, and with 12 people all arriving at once. In all runs every
+person was delivered, people got in and out on the correct floors, the
+elevator moved one floor at a time, and it never held more than 5 people.
+
+Implementation notes
+--------------------
+- Lock and Condition operations are made atomic by disabling interrupts around
+  queue/ownership state transitions.
+- Lock ownership is tracked explicitly (owner pointer), and Release asserts
+  ownership to enforce correct usage.
+- Condition::Wait performs atomic "release lock + sleep + reacquire" behavior
+  needed for correct condition-variable semantics.
+- Condition::Signal wakes one waiter; Broadcast wakes all waiters.
+- The elevator keeps moving in one direction while there are requests ahead
+  of it, then reverses. At each floor it lets riders out, then lets in people
+  going in its direction, up to 5.
+- Moving one floor is a loop of 50 iterations that yields each time, so that
+  people can arrive while the elevator is moving.
+- The elevator starts on floor 1 and prints "Elevator arrives on floor x."
+  only when it moves to a floor, so nothing is printed for its starting floor.
+- The synch.cc and synch.h changes are guarded by CHANGED alone rather than
+  CHANGED && THREADS, because the userprog, vm and network builds do not
+  define THREADS but still need working locks and conditions.
