@@ -32,6 +32,12 @@ extern Timer *timer;				// the hardware alarm clock
 #ifdef USER_PROGRAM
 #include "machine.h"
 extern Machine* machine;	// user program memory and registers
+#ifdef CHANGED
+class MemoryManager;
+class PCBTable;
+extern MemoryManager *memManager;	// hands out physical pages
+extern PCBTable *pcbTable;		// hands out pids
+#endif
 #endif
 
 #ifdef FILESYS_NEEDED 		// FILESYS or FILESYS_STUB 

@@ -40,6 +40,9 @@ Thread::Thread(const char* threadName)
     status = JUST_CREATED;
 #ifdef USER_PROGRAM
     space = NULL;
+#ifdef CHANGED
+    pcb = NULL;
+#endif
 #endif
 }
 

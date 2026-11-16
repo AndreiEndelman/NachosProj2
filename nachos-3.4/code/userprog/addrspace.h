@@ -23,6 +23,10 @@ class AddrSpace {
     AddrSpace(OpenFile *executable);	// Create an address space,
 					// initializing it with the program
 					// stored in the file "executable"
+#ifdef CHANGED
+    AddrSpace(AddrSpace *parent);	// Fork: a new address space holding
+					// a copy of the parent's memory
+#endif
     ~AddrSpace();			// De-allocate an address space
 
     void InitRegisters();		// Initialize user-level CPU registers,
@@ -31,11 +35,23 @@ class AddrSpace {
     void SaveState();			// Save/restore address space-specific
     void RestoreState();		// info on a context switch 
 
+#ifdef CHANGED
+    bool Translate(int virtAddr, int *physAddr);  // virtual -> physical
+    unsigned int getNumPages() { return numPages; }
+    bool IsValid() { return valid; }	// FALSE if the program didn't fit
+					// in free memory (Exec returns -1)
+#endif
+
   private:
     TranslationEntry *pageTable;	// Assume linear page table translation
 					// for now!
     unsigned int numPages;		// Number of pages in the virtual 
 					// address space
+#ifdef CHANGED
+    bool valid;
+    void LoadSegment(OpenFile *executable, int virtAddr, int size,
+		     int inFileAddr);
+#endif
 };
 
 #endif // ADDRSPACE_H
